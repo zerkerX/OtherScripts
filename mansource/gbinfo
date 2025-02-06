@@ -1,0 +1,11 @@
+NAME
+  gbinfo - Determines Game Boy ROM header information
+SYNOPSIS
+  gbinfo [file]...
+DESCRIPTION
+  gbinfo reads the header from all specified Game Boy ROM files, then
+  generates a summary 'Gameboy.tsv' file in the current directory.
+  This will also cross-check the header checksum and perform several
+  hashes on the ROM data.
+AUTHOR
+  Ryan Armstrong <software@zerker.ca>

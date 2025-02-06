@@ -1,0 +1,15 @@
+NAME
+  gameappmaker - creates application .desktop launchers for emulators and mods
+SYNOPSIS
+  gameappmaker
+DESCRIPTION
+  gameappmaker creates a whole series of .desktop launchers for various
+  emulator roms, disk images, DOSBOX configurations and Doom & Quake mods.
+  After the files are generated, it will print the proper menu files
+  to update for Xfce submenus.
+  
+  See embedded documentation in gameapplib library for more details
+  (e.g. pydoc gameapplib)
+
+AUTHOR
+  Ryan Armstrong <software@zerker.ca>

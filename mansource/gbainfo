@@ -1,0 +1,11 @@
+NAME
+  gbainfo - Determines GBA ROM header information
+SYNOPSIS
+  gbainfo [file]...
+DESCRIPTION
+  gbainfo reads the header from all specified GBA ROM files, then
+  generates a summary 'GBA.tsv' file in the current directory.
+  This will also cross-check the header checksum and perform several
+  hashes on the ROM data.
+AUTHOR
+  Ryan Armstrong <software@zerker.ca>

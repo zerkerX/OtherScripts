@@ -1,0 +1,10 @@
+#!/bin/sh
+cd $1
+#~ tree -Dh .
+ls -Rlh
+find . -iname \*.zip -exec unzip -l {} \;
+find . -iname \*.tar -exec tar -tvf {} \;
+find . -iname \*.tgz -exec tar -tvf {} \;
+find . -iname \*.tar.gz -exec tar -tvf {} \;
+find . -iname \*.tar.gzip -exec tar -tvf {} \;
+find . -iname \*.tar.bzip2 -exec tar -tvf {} \;

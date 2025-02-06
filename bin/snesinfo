@@ -1,0 +1,163 @@
+#!/usr/bin/python3
+# Copyright 2016 Ryan Armstrong
+#
+# This file is part of Game Header Lister.
+#
+# Game Header Lister is free software: you can redistribute
+# it and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# Game Header Lister is distributed in the hope that it will
+# be useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+# of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with Game Header Lister.
+# If not, see <http://www.gnu.org/licenses/>.
+
+import sys
+import os
+import struct
+import csv
+import hashlib
+import binascii
+import ninlicensee
+
+import pdb
+
+romtypelow = {0 : 'ROM Only', 1: 'ROM + RAM', 2: 'ROM + RAM + SRAM', 
+    3: 'ROM + Co-processor', 4: 'ROM + Co-processor + RAM', 
+    5: 'ROM + Co-processor + SRAM', 6: 'ROM + Co-processor + SRAM'}
+romtypehigh = {0: 'DSP', 1: 'SuperFX', 2: 'OBC1', 3: 'SA-1', 5: 'Unknown', 
+    0xE: 'Other Chip', 0xF: 'Custom Chip'}
+
+regions = {0 : 'Japan', 1: 'North America', 2: 'Europe', 3: 'Scandinavia',
+    6: 'Europe (French)', 7: 'Dutch', 8: 'Spanish', 9: 'German', 
+    0xA: 'Italian', 0xB: 'Chinese', 0xD: 'Korean', 0xE: 'Common',
+    0xF: 'Canada', 0x10: 'Brazil', 0x11: 'Australia'}
+
+class snesrom:
+    regdata_fmt='<2s4s7xBBB'
+    specs_fmt='<21sBBBBBBBHH'
+
+    def __init__(self, filename):
+        self.data = dict()
+        self.data['filename'] = filename
+
+        # Read from the default location
+        romfile = open(filename, 'rb')
+        romfile.seek(0x7FB0)
+        regdata = struct.unpack(self.regdata_fmt,
+            romfile.read(struct.calcsize(self.regdata_fmt)))
+        specs = struct.unpack(self.specs_fmt,
+            romfile.read(struct.calcsize(self.specs_fmt)))
+            
+        # Check the checksum/compl check to see if this is a real header
+        if 0xFFFF^specs[9] != specs[8] \
+                or specs[8] == 255 or specs[8] == 0 or specs[8] == 0xFFFF:
+            romfile.seek(0xFFB0)
+            regdata = struct.unpack(self.regdata_fmt,
+                romfile.read(struct.calcsize(self.regdata_fmt)))
+            specs = struct.unpack(self.specs_fmt,
+                romfile.read(struct.calcsize(self.specs_fmt)))
+
+        # Store the name
+        try:
+            self.data['name'] = specs[0].decode('shift-jis').strip()
+        except Exception:
+            pdb.set_trace()
+
+
+        # Determine using the maker code whether the registration data is valid
+        if specs[6] == 51:
+            # Registration data is valid
+            self.data['licensee code type'] = 'New'
+            self.data['gamecode'] = regdata[1].decode('shift-jis').strip()
+            
+            try:
+                self.data['licensee code'] = ninlicensee.newlic[regdata[0].decode()]
+            except Exception:
+                self.data['licensee code'] = 'Unknown ({})'.format(regdata[0])
+
+            for (number, label) in [
+                    (2, 'expsize'),
+                    (3, 'specversion'), (4, 'carttype')]:
+                self.data[label] = regdata[number]
+
+        else:
+            self.data['licensee code type'] = 'Old'
+            # No registration data. Use old maker code only
+            try:
+                self.data['licensee code'] = ninlicensee.oldlic[specs[6]]
+            except Exception:
+                self.data['licensee code'] = 'Unknown ({:02X})'.format(specs[6])            
+            
+            for label in ['expsize', 'specversion', 'carttype']:
+                self.data[label] = 'n/a'
+            
+
+
+        # Put mapper mode, completement check, and checksum in HEX:
+        self.data['compl check'] = '0x{:04X}'.format(specs[8])
+        self.data['checksum'] = '0x{:04X}'.format(specs[9])
+        self.data['map mode'] = '0x{:02X}'.format(specs[1])
+            
+        # Decode rom type:
+        lowcode = specs[2] & 0xF
+        highcode = (specs[2] & 0xF0) >> 4
+        self.data['rom type'] = romtypelow[lowcode]
+        if highcode > 0 or lowcode > 2:
+            self.data['rom type'] += ' with ' + romtypehigh[highcode]
+            
+        # decode the region
+        self.data['dest code'] = regions[specs[5]]
+
+        # Copy version number
+        self.data['version #'] = specs[7]
+            
+        # Calculate ROM sizes
+        self.data['rom size'] = 1048 * 2**specs[3] 
+        if specs[4] > 0:
+            self.data['sram size'] = 1024 * 2**specs[4] 
+        else:
+            self.data['sram size'] = 0
+            
+        # Read full file data and calculate relevant hashes:
+        romfile.seek(0)
+        romdata = romfile.read()
+
+        self.data['filesize'] = len(romdata)
+        self.data['crc'] = '{:08X}'.format(binascii.crc32(romdata))
+        self.data['md5'] = hashlib.md5(romdata).hexdigest().upper()
+        self.data['sha1'] = hashlib.sha1(romdata).hexdigest().upper()
+
+        # Calculate the correct checksum for this Rom
+        sumval = 0
+        highbyte = True
+        for byteval in romdata:
+            sumval = sumval + byteval
+
+        self.data['actsum'] = '0x{:04X}'.format(0xFFFF & sumval)
+        self.data['chksum match'] = (self.data['actsum'] == self.data['checksum'])
+
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("""Usage: snesinfo [sfc file(s)]...
+""")
+    else:
+        with open('SNES.tsv', 'w', encoding='UTF8') as outfile:
+            writer = csv.DictWriter(outfile, ['filename', 'licensee code', 'licensee code type', 'gamecode',
+                'expsize', 'specversion', 'carttype', 'name', 'map mode',
+                'rom type', 'rom size', 'sram size', 'dest code', 
+                'version #', 'compl check', 'checksum', 'actsum', 'chksum match',
+                'filesize', 'crc', 'md5', 'sha1'], dialect=csv.excel_tab)
+            writer.writeheader()
+            for filename in sys.argv[1:]:
+                print(filename)
+                rom = snesrom(filename)
+                writer.writerow(rom.data)
+

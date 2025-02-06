@@ -1,0 +1,2 @@
+#!/bin/sh
+pandoc "$1" -st html | w3m -T text/html

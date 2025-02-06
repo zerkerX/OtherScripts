@@ -1,0 +1,7 @@
+#!/bin/sh
+man -t $1 | ps2pdf - > $1.pdf
+emptysize=2217
+actualsize=$(wc -c <"$1.pdf")
+if [ $actualsize -eq $emptysize ]; then
+    rm $1.pdf
+fi

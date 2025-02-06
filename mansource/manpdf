@@ -1,0 +1,12 @@
+NAME
+  manpdf - creates a PDF file of the given manpage subject
+SYNOPSIS
+  manpdf [subject]
+DESCRIPTION
+  manpdf converts a given manual page subject to a PDF file of the same
+  name in the current folder using the man(1) and ps2pdf(1) utilities.
+SEE ALSO
+  man(1), ps2pdf(1)
+  
+AUTHOR
+  Ryan Armstrong <software@zerker.ca>

@@ -1,0 +1,11 @@
+NAME
+  lowercase - converts all filenames to lowercase
+SYNOPSIS
+  lowercase
+DESCRIPTION
+  lowercase converts all file names in the current directory to lower 
+  case. It will only operates on plain files; it does not change the 
+  name of directories. It will also ask for verification before 
+  overwriting an existing file.
+AUTHOR
+  Unknown

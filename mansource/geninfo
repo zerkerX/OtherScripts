@@ -1,0 +1,11 @@
+NAME
+  geninfo - Determines Sega Genesis ROM header information
+SYNOPSIS
+  geninfo [file]...
+DESCRIPTION
+  geninfo reads the header from all specified Sega Genesis ROM files, then
+  generates a summary 'gameheaders.tsv' file in the current directory.
+  This will also cross-check the header checksum and perform several
+  hashes on the ROM data.
+AUTHOR
+  Ryan Armstrong <software@zerker.ca>

@@ -1,0 +1,87 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
+import os
+import shutil
+import pdb
+import subprocess
+from operator import itemgetter
+from lxml import etree
+from lxml.builder import E
+from enum import Enum
+from argparse import ArgumentParser
+
+
+COMMON_CSS = """
+h1 { margin: 10pt 0;
+    font-weight: normal;
+    font-size: 2em}
+
+div {
+    font-size: 36pt;
+    border-bottom: 2pt solid black;
+    padding: 15pt 0pt;
+}
+"""
+
+def find_fonts(fontfolder):
+    fonts = []
+    for (dirpath, dirnames, filenames) in os.walk(fontfolder):
+        for filename in filenames:
+            name, ext = os.path.splitext(filename)
+            if ext.lower() in ['.ttf', '.otf']:
+                fonts.append( (name, os.path.join(dirpath, filename)) )
+    
+    fonts.sort()
+    return fonts
+        
+    
+
+def main():
+    parser = ArgumentParser(description='Creates a gallery of fonts.')
+    parser.add_argument('-o', dest='outfilename',
+                       default='index.html',
+                       help='Output gallery path and filename')
+    parser.add_argument('fontfolder', default='.', nargs='?',
+                       help='Font folder to generate a gallery for.')
+
+    args = parser.parse_args()
+
+    fonts = find_fonts(args.fontfolder)
+    
+    csstext = COMMON_CSS
+    
+    for num, (font, fontpath) in enumerate(fonts):
+        csstext += """
+@font-face {{
+  font-family: customFont{};
+  src: url({});
+}}
+""".format(num, fontpath)
+
+    with open(args.outfilename, 'w') as outfile:
+        outfile.write(' <!DOCTYPE html> \n')
+        htmlnode = E.html(
+            E.head(
+                E.meta({'http-equiv': "content-type", 
+                    'content':"text/html; charset=utf-8"}),
+                E.title('Font Gallery'),
+                E.style(csstext, {'type': 'text/css'} )
+            ))
+        bodynode = E.body()
+
+        for num, (font, fontpath) in enumerate(fonts):
+            bodynode.append(E.div(E.h1(font), 
+                "The quick brown fox jumps over the lazy dog.", E.br(), 
+                "!\"#$%&\'()*+,-./0123456789:;<=>?", E.br(),
+                "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_", E.br(),
+                "` abcdefghijklmnopqrstuvwxyz{|}~'",
+                style="font-family: customFont{}".format(num) ) )
+
+        htmlnode.append(bodynode)
+        outfile.write(etree.tostring(htmlnode, pretty_print=True).decode())
+
+
+
+if __name__ == '__main__':
+    main()

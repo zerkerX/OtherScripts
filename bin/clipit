@@ -1,0 +1,23 @@
+#!/usr/bin/python3
+import pyperclip
+import notify2
+from argparse import ArgumentParser
+
+def main():
+    parser = ArgumentParser(description='Copies the specified string to the clipboard.')
+    parser.add_argument('message', help='Message to copy.')
+    parser.add_argument('-s', dest='sound',
+                       default='/usr/local/share/sounds/clipit.wav',
+                       help='Sound to play when clipboard populated.')
+
+    args = parser.parse_args()
+    notify2.init('Clip-it')
+
+    pyperclip.copy(args.message)
+
+    n = notify2.Notification('Copied text', args.message, 'text-x-generic')
+    n.show()
+    time.sleep(1)
+
+if __name__ == '__main__':
+    main()

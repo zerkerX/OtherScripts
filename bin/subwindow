@@ -1,0 +1,6 @@
+#!/bin/sh
+Xephyr -ac -listen tcp :1 -screen 1280x1350 -resizeable &
+export DISPLAY=:1
+sleep 1
+xfce4-appfinder &
+xfwm4

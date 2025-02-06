@@ -1,0 +1,103 @@
+#!/usr/bin/python3
+# This converts a sensors log into a simple CSV format
+
+import pdb
+import csv
+from argparse import ArgumentParser
+
+def write_tsv(outfile, dataset):
+    with open(outfile, 'w', newline='') as tsvfile:
+        output = csv.writer(tsvfile, dialect=csv.excel_tab)
+        
+        # Header row first
+        fields = []
+        fieldlups = []
+        for device in sorted(dataset[0]):
+            for field in sorted(dataset[0][device]):
+                fields.append(f'{device}.{field}')
+                fieldlups.append( (device, field) )
+                
+        output.writerow(fields)
+        
+        # Now the rest of the data
+        for row in dataset:
+            datarow = []
+            for device, field in fieldlups:
+                datarow.append(row[device][field])
+            output.writerow(datarow)
+
+def get_log_dataset(logfile):
+    device = next(logfile).strip()
+    adaptor = next(logfile)
+    if not adaptor.startswith("Adapter:"):
+        raise Exception("Unexpected log format; adapter not after device")
+    
+    firstdevice = device
+    
+    # Create new data dictionaries. Pre-insert the field into the device
+    # list; it will update again later due to reference to same object
+    devices = {}
+    fields = {}
+    devices[device] = fields
+    done = False
+    
+    while not done:
+        datarow = next(logfile).strip()
+        
+        # Blank rows are a gap between devices
+        if not datarow:
+            try:
+                device = next(logfile).strip()
+                adaptor = next(logfile)
+            except StopIteration:
+                # End our processing, but trick the algorithm to return one last row
+                done = True
+                device = firstdevice
+            if not adaptor.startswith("Adapter:"):
+                raise Exception("Unexpected log format; adapter not after device")
+            if device == firstdevice:
+                yield devices
+                devices = {}
+            
+            # Reset fields for new device and continue
+            fields = {}
+            devices[device] = fields
+        else:
+            # Data row
+            field, sep, val = datarow.partition(':')
+            if sep and val:
+                bracket = val.find('(')
+                sensor = val.find('sensor')
+                if bracket >=0:  
+                    val = val[:bracket]
+                elif sensor >= 0:
+                    val = val[:sensor]
+                    
+                val = val.replace('°C', '')
+                val = val.replace('RPM', '')
+                    
+                fields[field] = val.strip()
+                
+
+
+def parse_log(filename, outname):
+    with open(filename) as infile:
+        data = [datarow for datarow in get_log_dataset(infile)]
+        
+    if not outname:
+        # TODO: Quick and dirty
+        outname = 'output.tsv'
+        
+    write_tsv(outname, data)
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser(description='Converts a log file to TSV (tab-separated data file).')
+    parser.add_argument('logfile',
+            help='Log file to convert')
+    parser.add_argument('-o', '--output',
+            help='Output path. If not specified, will match input name')
+
+    args = parser.parse_args()
+    parse_log(args.logfile, args.output)
+    

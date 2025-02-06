@@ -1,0 +1,11 @@
+NAME
+  n64info - Determines N64 ROM header information
+SYNOPSIS
+  n64info [file]...
+DESCRIPTION
+  n64info reads the header from all specified N64 ROM files, then
+  generates a summary 'N64.tsv' file in the current directory.
+  This will also cross-check the header checksum and perform several
+  hashes on the ROM data.
+AUTHOR
+  Ryan Armstrong <software@zerker.ca>

@@ -1,0 +1,130 @@
+#!/usr/bin/python3
+# Copyright 2016 Ryan Armstrong
+#
+# This file is part of Game Header Lister.
+#
+# Game Header Lister is free software: you can redistribute
+# it and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# Game Header Lister is distributed in the hope that it will
+# be useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+# of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with Game Header Lister.
+# If not, see <http://www.gnu.org/licenses/>.
+
+import sys
+import os
+import struct
+import csv
+import hashlib
+import binascii
+import ninlicensee
+
+import pdb
+
+class gbarom:
+
+    # From http://www.enliten.force9.co.uk/gameboy/carthead.htm
+    # Though http://gbdev.gg8.se/wiki/articles/The_Cartridge_Header is a better reference
+    # Reformatted and re-ordered for use
+    # Size	Content
+    # 1	NOP
+    # 3	JP ????h
+    # 48	Nintendo Logo
+    # 15	Game Title
+    # 1	Colour Compatibility
+    # 1	New Licensee Code MSB
+    # 1	New Licensee Code LSB
+    # 1	GB/SGB Function
+    # 1	Cartridge Type
+    # 1	Cartridge ROM Size
+    # 1	Cartridge RAM Size
+    # 1	Destination Code
+    # 1	Old Licensee Code
+    # 1	Mask ROM Version
+    # 1	Complement Checksum
+    # 1	Checksum MSB
+    # 1	Checksum LSB
+    header_fmt='>4x156s12s4s2sxBB7xBB'
+
+    def __init__(self, filename):
+        self.data = dict()
+        self.data['filename'] = filename
+
+        # Read from the default location
+        romfile = open(filename, 'rb')
+
+        rawdata = struct.unpack(self.header_fmt,
+            romfile.read(struct.calcsize(self.header_fmt)))
+            
+        # 0 : TODO DO SOMETHING WITH NINTENDO LOGO
+        #pdb.set_trace()
+        
+        # 1 : Name and code
+        self.data['name'] = rawdata[1].decode().strip('\0')
+        self.data['code'] = rawdata[2].decode().strip('\0')        
+        
+        # Licensee Codes
+        try:
+            self.data['licensee code'] = ninlicensee.newlic[rawdata[3].decode()]
+        except Exception:
+            self.data['licensee code'] = 'Unknown ({})'.format(rawdata[3])
+
+        self.data['main unit code'] = '0x{:02X}'.format(rawdata[4])
+        self.data['device type'] = '0x{:02X}'.format(rawdata[5])
+        self.data['version'] = rawdata[6]
+        self.data['compl check'] = '0x{:02X}'.format(rawdata[7])
+            
+        # Read full file data and calculate relevant hashes:
+        romfile.seek(0)
+        romdata = romfile.read()
+
+        self.data['filesize'] = len(romdata)
+        self.data['crc'] = '{:08X}'.format(binascii.crc32(romdata))
+        self.data['md5'] = hashlib.md5(romdata).hexdigest().upper()
+        self.data['sha1'] = hashlib.sha1(romdata).hexdigest().upper()
+
+        # Calculate the correct complement check for this Rom
+        sumval = 0
+        for address in range(0xA0, 0xBC+1):
+            sumval += romdata[address]
+            
+        # Add 0x19 and Convert to a 2's complement
+        sumval += 0x19
+        sumval = -sumval
+
+        self.data['actcompl'] = '0x{:02X}'.format(0xFF & sumval)
+        self.data['compl match'] = (self.data['actcompl'] == self.data['compl check'])
+
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("""Usage: gbainfo [gba file(s)]...
+""")
+    else:
+        with open('GBA.tsv', 'w', encoding='UTF8') as outfile:
+
+
+            writer = csv.DictWriter(outfile, ['filename', 
+                'name', 
+                'code', 
+                'licensee code', 
+                'main unit code', 
+                'device type', 
+                'version', 
+                'compl check', 
+                'actcompl', 
+                'compl match', 
+                'filesize', 'crc', 'md5', 'sha1'], dialect=csv.excel_tab)
+            writer.writeheader()
+            for filename in sys.argv[1:]:
+                print(filename)
+                rom = gbarom(filename)
+                writer.writerow(rom.data)
+

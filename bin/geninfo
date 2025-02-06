@@ -1,0 +1,110 @@
+#!/usr/bin/python3
+# Copyright 2013 Ryan Armstrong
+#
+# This file is part of Game Header Lister.
+#
+# Game Header Lister is free software: you can redistribute
+# it and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# Game Header Lister is distributed in the hope that it will
+# be useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+# of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with Game Header Lister.
+# If not, see <http://www.gnu.org/licenses/>.
+
+import sys
+import os
+import struct
+import csv
+import hashlib
+import binascii
+
+import pdb
+
+class genesisrom:
+    genheader='>16s16s48s48s14sH16s7L12s40s16s'
+
+    def __init__(self, filename):
+        romfile = open(filename, 'rb')
+        romfile.seek(0x100)
+        rawheader = struct.unpack(self.genheader,
+            romfile.read(struct.calcsize(self.genheader)))
+        self.data = dict()
+
+        # Decode (if needed) then store the header information by name
+        for (number, label) in [(0, 'system'), (1, 'copyright'),
+                (2, 'domesticname'), (3, 'overseasname'), (4, 'prodcode'),
+                (6, 'iosupport'), (14, 'modem'), (16, 'releases')]:
+            self.data[label] = rawheader[number].decode('shift_jis').strip()
+
+        for (number, label) in [(7, 'romstart'),
+                (8, 'romend'), (12, 'ramstart'), (13, 'ramend')]:
+            self.data[label] = rawheader[number]
+
+        # Calculate Rom & Ram sizes, then remove original addresses
+        self.data['romsize'] = (self.data['romend'] - self.data['romstart'] + 1)
+        self.data['megabits'] = self.data['romsize']/1024.0/128.0
+        if (self.data['ramstart'] != 0x20202020 and
+                self.data['ramend'] != 0x20202020 and
+                self.data['ramend'] > self.data['ramstart']):
+            self.data['ramsize'] = self.data['ramend'] - self.data['ramstart'] + 1
+        else:
+            self.data['ramsize'] = 0
+        del self.data['romstart']
+        del self.data['romend']
+        del self.data['ramstart']
+        del self.data['ramend']
+
+        # Calculate the correct check value for this Rom
+        sumval = 0
+        highbyte = True
+        romdata = romfile.read(self.data['romsize'] - 0x200)
+        for byteval in romdata:
+            if highbyte:
+                sumval = sumval + byteval * 256
+            else:
+                sumval = sumval + byteval
+            highbyte = not highbyte
+
+        self.data['actsum'] = '{:04X}'.format(0xFFFF & sumval)
+        self.data['chksum'] = '{:04X}'.format(rawheader[5])
+        self.data['chksum match'] = (self.data['actsum'] == self.data['chksum'])
+
+        # Memo field can be binary or text data. In the absence of useful
+        # encoding, just cache this for now:
+        self.memo = rawheader[15]
+
+        # Read full file data and calculate relevant hashes:
+        romfile.seek(0)
+        romdata = romfile.read()
+
+        self.data['filesize'] = len(romdata)
+        self.data['crc'] = '{:08X}'.format(binascii.crc32(romdata))
+        self.data['md5'] = hashlib.md5(romdata).hexdigest().upper()
+        self.data['sha1'] = hashlib.sha1(romdata).hexdigest().upper()
+
+
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("""Usage: geninfo [bin file(s)]...
+""")
+    else:
+        with open('Genesis.tsv', 'w', encoding='UTF8') as outfile:
+            writer = csv.DictWriter(outfile, ['system', 'copyright',
+                'domesticname', 'overseasname', 'prodcode',
+                'chksum', 'actsum', 'chksum match', 'iosupport',
+                'romsize', 'megabits', 'ramsize', 'modem', 'releases',
+                'filesize', 'crc', 'md5', 'sha1'], dialect=csv.excel_tab)
+            writer.writeheader()
+
+            for filename in sys.argv[1:]:
+                rom = genesisrom(filename)
+                writer.writerow(rom.data)
+

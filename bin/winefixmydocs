@@ -1,0 +1,3 @@
+#!/bin/sh
+rm $WINEPREFIX/drive_c/users/$USER/My\ Documents
+ln -s /usr/local/share/Archives/Configs\ and\ Saves/Wine\ Docs $WINEPREFIX/drive_c/users/$USER/My\ Documents

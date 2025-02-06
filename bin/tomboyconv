@@ -1,0 +1,162 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+import os
+import re
+import pdb
+from datetime import datetime
+from lxml import etree
+from lxml.builder import E
+from argparse import ArgumentParser
+from glob import glob
+from urllib.parse import quote
+
+
+class TomboyNote:
+    NS = {'tom': "http://beatniksoftware.com/tomboy",
+        'link':"http://beatniksoftware.com/tomboy/link",
+        'size':"http://beatniksoftware.com/tomboy/size"}
+
+    START = '<note-content version="0.1">'
+    END = '</note-content>'
+
+    def __init__(self, filename):
+        self.filename = filename
+        with open(filename) as infile:
+            xml = etree.parse(infile)
+            root = xml.getroot()
+            self.title = root.find("tom:title", self.NS).text
+            modtime = root.find("tom:last-change-date", self.NS).text
+            modtime = modtime[:26]
+            self.modtime = datetime.strptime(modtime, '%Y-%m-%dT%H:%M:%S.%f')
+            
+            self.template = False
+            self.notebook = "Uncategorized"
+            for tag in root.findall("tom:tags/tom:tag", self.NS):
+                if tag.text == "system:template":
+                    self.template = True
+                elif tag.text.startswith("system:notebook:"):
+                    self.notebook = tag.text.partition("system:notebook:")[2]
+                    
+            infile.seek(0)
+            temp = infile.read()
+            
+            startpos = temp.find(self.START)
+            endpos = temp.find(self.END)
+            self.text = temp[startpos + len(self.START):endpos]
+            self.htmlname = quote(self.title, safe=' ') + ".html"
+
+    def __lt__(self, other):
+        return self.title < other.title
+
+    def __gt__(self, other):
+        return self.title > other.title
+
+    def __eq__(self, other):
+        return self.title == other.title
+
+    def write_html(self, outpath):
+        filename = os.path.join(outpath, self.htmlname)
+        try:
+            filestat = os.stat(filename)
+            filetime = datetime.fromtimestamp(filestat.st_mtime)
+        except:
+            filetime = datetime(1990, 1, 1)
+        if self.modtime > filetime:
+            print('Writing updated note to', filename)
+            with open(filename, 'w') as outfile:
+                outfile.write('<!-- From {} -->\n'.format(self.filename))
+                outfile.write('<html><head><title>{}</title></head>\n<body>\n'.format(self.title))
+                text = self.text.replace('\n', '<br/>\n')
+                text = text.replace('  ', ' &nbsp;')
+                text = text.replace('\t', ' &nbsp; &nbsp;')
+                text = text.replace('<list>', '<ul>')
+                text = text.replace('</list>', '</ul>')
+                text = text.replace('<list-item dir="ltr">', '<li>')
+                text = text.replace('</list-item>', '</li>')
+                text = text.replace('<bold>', '<b>')
+                text = text.replace('</bold>', '</b>')
+                text = text.replace('<monospace>', '<code>')
+                text = text.replace('</monospace>', '</code>')
+                text = text.replace('<strikethrough>', '<del>')
+                text = text.replace('</strikethrough>', '</del>')
+                text = text.replace('<underline>', '<u>')
+                text = text.replace('</underline>', '</u>')
+                text = text.replace('<italic>', '<i>')
+                text = text.replace('</italic>', '</i>')
+                text = text.replace('<size:small>', '<font size="2">')
+                text = text.replace('</size:small>', '</font>')
+                text = text.replace('<highlight>', '<span style="background-color: #FFFF00">')
+                text = text.replace('</highlight>', '</span>')
+                # Some BR cleanup:
+                text = text.replace('<br/>\n</li>', '</li>')
+                text = text.replace('</ul><br/>', '</ul>')
+                
+                
+                text = re.sub(r'^(.+)<br/>\n<br/>', r'<h1>\1</h1>', text)
+                text = re.sub(r'<size:large>([^<]+)</size:large><br/>', r'<h3>\1</h3>', text)
+                text = re.sub(r'<size:huge>([^<]+)</size:huge><br/>', r'<h2>\1</h2>', text)
+                text = re.sub(r'<link:url>([^<]+)</link:url>', r'<a href="\1">\1</a>', text)
+                text = re.sub(r'<link:internal>([^<]+)</link:internal>', r'<a href="\1.html">\1</a>', text)
+                outfile.write(text)
+                outfile.write('</body></html>')
+            
+def write_index(categories, outpath):
+    filename = os.path.join(outpath, 'index.html')
+    with open(filename, 'w') as outfile:
+        htmlnode = E.html(
+            E.head(
+                E.meta({'http-equiv': "content-type", 
+                    'content':"text/html; charset=utf-8"}),
+                
+                E.title('Tomboy Notes'),
+                # E.style(csstext, {'type': 'text/css'} )
+            ))
+        bodynode = E.body( E.h1('Tomboy Notes') )
+        
+        for category in sorted(categories.keys()):
+            bodynode.append( E.h2(category) )
+            added = 0
+            listnode = E.ul()
+            for note in sorted(categories[category]):
+                if not note.template:
+                    # Quote again, because we want the actual filename, not the original chars.
+                    listnode.append( E.li( E.a(note.title, 
+                            href=quote(note.htmlname)) ) )
+                    added += 1
+            if added:
+                bodynode.append(listnode)
+            
+        htmlnode.append(bodynode)
+        outfile.write(etree.tostring(htmlnode, pretty_print=True).decode())
+
+            
+def main():
+    parser = ArgumentParser(description='Converts a Tomboy note folder to HTML')
+    parser.add_argument('-o', dest='outputpath',
+                       default='$HOME/public_html/Notes',
+                       help='Output path')
+    parser.add_argument('tomboyfolder', default='$HOME/.local/share/tomboy', nargs='?',
+                       help='Tomboy folder to convert')
+
+    args = parser.parse_args()
+    
+    notes = []
+    categories = {}
+    
+    for filename in glob(os.path.join(os.path.expandvars(args.tomboyfolder), "*.note")):
+        note = TomboyNote(filename)
+        notes.append(note)
+        if note.notebook not in categories:
+            categories[note.notebook] = []
+        
+        categories[note.notebook].append(note)
+        
+    for note in notes:
+        if not note.template:
+            note.write_html(os.path.expandvars(args.outputpath))
+    
+    write_index(categories, os.path.expandvars(args.outputpath))
+
+
+if __name__ == '__main__':
+    main()

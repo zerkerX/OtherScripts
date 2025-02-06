@@ -1,0 +1,15 @@
+NAME
+  manlocalpdf - creates a PDF file of the given manpage subject from the current folder
+SYNOPSIS
+  manlocalpdf [subject]
+DESCRIPTION
+  manlocalpdf converts a given manual page subject to a PDF file of the same
+  name in the current folder using the man(1) and ps2pdf(1) utilities.
+  This variant uses the current folder as the manpage source, which can
+  be useful for converting pages for operating systems other than the
+  currently-installed one.
+SEE ALSO
+  man(1), ps2pdf(1)
+  
+AUTHOR
+  Ryan Armstrong <software@zerker.ca>

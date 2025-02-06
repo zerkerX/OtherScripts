@@ -1,0 +1,49 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
+from operator import itemgetter
+from argparse import ArgumentParser
+from pathlib import Path
+from lxml import etree
+from lxml.builder import E
+import pdb
+
+def create_listing(directory):
+    dirname = directory.resolve().name
+    
+    htmlnode = E.html(
+        E.head(
+            E.meta({'http-equiv': "content-type", 
+                'content':"text/html; charset=utf-8"}),
+            E.title(dirname)
+        ))
+    bodynode = E.body( E.h1(dirname) )
+    listdef = E.ul()
+    
+    for fileitem in sorted(directory.iterdir()):
+        if not fileitem.name.startswith('.'):
+            if fileitem.is_dir():
+                listdef.append(E.li(E.a(fileitem.name, href=fileitem.name)))
+            else:
+                listdef.append(E.li(
+                    E.a(fileitem.name, href=fileitem.name),
+                    f' ({fileitem.stat().st_size} bytes)'
+                    ))
+    
+
+    bodynode.append(listdef)
+    htmlnode.append(bodynode)
+    
+    with (directory / 'index.html').open('w') as indexfile:
+        indexfile.write(' <!DOCTYPE html> \n')
+        indexfile.write(etree.tostring(htmlnode, pretty_print=True).decode())
+
+if __name__ == "__main__":
+    parser = ArgumentParser(description='Creates a gallery of images.')
+    parser.add_argument('imagefolder', default=[Path('.')], nargs='*', type=Path,
+                       help='Folder to create a listing for')
+
+    args = parser.parse_args()
+
+    for folder in args.imagefolder:
+        create_listing(folder)

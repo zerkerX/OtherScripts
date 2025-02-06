@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+import subprocess
+import pdb
+import re
+import os
+import csv
+from argparse import ArgumentParser
+
+
+
+class benchmarker:
+    SIZES = [
+        512,
+        1*0x400,
+        2*0x400,
+        4*0x400,
+        8*0x400,
+        16*0x400,
+        32*0x400,
+        64*0x400,
+        128*0x400,
+        256*0x400,
+        512*0x400,
+        1*0x100000,
+        2*0x100000,
+        4*0x100000,
+        8*0x100000,
+        12*0x100000,
+        16*0x100000,
+        24*0x100000,
+        32*0x100000,
+        48*0x100000,
+        64*0x100000
+    ]
+
+    # Also used as parameter to dd
+    LABELS = [
+        '512',
+        '1k',
+        '2k',
+        '4k',
+        '8k',
+        '16k',
+        '32k',
+        '64k',
+        '128k',
+        '256k',
+        '512k',
+        '1M',
+        '2M',
+        '4M',
+        '8M',
+        '12M',
+        '16M',
+        '24M',
+        '32M',
+        '48M',
+        '64M',
+    ]
+    
+    SPECS = re.compile(r'([0-9]+) bytes \(.+\) copied, ([0-9.]+) s, ')
+
+    def __init__(self, filename, size):
+        self.maxsize = size * 0x100000
+        
+        self.readdata = []
+        self.writedata = []
+        self.filename = filename
+    
+    def add_result(self, isread, label, stderr):
+        match = self.SPECS.search(stderr)
+        try:
+            size = float(match.group(1))
+            time = float(match.group(2))
+        except:
+            raise(Exception(stderr))
+        speed = size/time
+        
+        if isread:
+            print("Read", label, speed/1000/1000, 'MB/s')
+            self.readdata.append(speed)
+        else:
+            print("Write", label, speed/1000/1000, 'MB/s')
+            self.writedata.append(speed)
+        
+    
+    def run(self):
+        for size, label in zip(self.SIZES, self.LABELS):
+            # End when we reach our limit
+            if size > self.maxsize:
+                break
+
+            # Scale by maxsize to determine number of iterations.
+            # Limit to 10k iterations to speed up the smaller segment sizes
+            count = min(self.maxsize // size, 10000)
+            
+            # Write test first
+            result = subprocess.run(['dd', 'if=/dev/zero', 'of=' + self.filename, 
+                'bs=' + label, 'count=' + str(count), 'oflag=direct'],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                    universal_newlines=True)
+            self.add_result(False, label, result.stderr)
+            
+            # Then read test
+            result = subprocess.run(['dd', 'if=' + self.filename, 'of=/dev/null', 
+                'bs=' + label, 'count=' + str(count), 'iflag=direct'],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                    universal_newlines=True)
+            self.add_result(True, label, result.stderr)
+            
+            # Then cleanup (TODO: more robust?)
+            if '/dev' not in self.filename:
+                os.remove(self.filename)
+        
+    def save(self, outname):
+        with open(outname, 'w', newline='') as outfile:
+            output = csv.writer(outfile, dialect=csv.excel_tab)
+            output.writerow(['Block Size', 'Read Speed (MB/s)', 'Write Speed (MB/s)'])
+            for index, readspeed in enumerate(self.readdata):
+                output.writerow([self.LABELS[index], 
+                    readspeed/0x100000, self.writedata[index]/0x100000])
+
+def main():
+    parser = ArgumentParser(description='Benchmarks the specified disk.')
+    parser.add_argument('filename', 
+        help='Filename for a temporary file to benchmark with. '
+        'Should NOT already exist.')
+    parser.add_argument('-s', '--size', 
+        help='Maximum filesize to benchmark against, in megabytes.',
+        default=0x100, type=int)
+    parser.add_argument('-o', '--output', help='Output filename.',
+        default='out.tsv')
+
+    args = parser.parse_args()
+    bench = benchmarker(args.filename, args.size)
+    bench.run()
+    bench.save(args.output)
+    
+if __name__ == '__main__':
+    main()
