@@ -1,0 +1,11 @@
+NAME
+  dosdecode - decodes raw Code Page 437 data into UTF-8 equivalents
+SYNOPSIS
+  dosdecode
+DESCRIPTION
+  dosdecode takes Code Page 437 character input on standard in and 
+  writes UTF-8 equivalent to standard out. This can be useful for
+  converting data captured over a serial port, or text files
+  intended for DOS PCs.
+AUTHOR
+  Ryan Armstrong <software@zerker.ca>
