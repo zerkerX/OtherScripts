@@ -10,3 +10,9 @@ mkdir -p "$DEST/bin"
 mkdir -p "$DEST/share/man/man1"
 install -t "$DEST/bin" bin/*
 install -t "$DEST/share/man/man1" man/*
+
+PYDEST=$(./getpypath.py $DEST)
+if $_; then
+    mkdir -p "$PYDEST"
+    install -t "$PYDEST" lib/python/*    
+fi
