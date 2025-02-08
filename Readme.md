@@ -1,4 +1,4 @@
-# OOther Scripts
+# Other Scripts
 
 Various other scripts from "Ryan's Tools" suite.
 
