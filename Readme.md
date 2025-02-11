@@ -28,4 +28,8 @@ or
 $ PREFIX=/home/youruser/.local ./install.sh
 ```
 
+**NOTE**: Python libraries attempt to detect a suitable Python include path
+using the `getpypath.py` helper script. At present they will only install
+into `/usr/local` (specifically *purelib*) or your home folder (*USER_SITE*).
+
 Refer to manpages for details on any individual tool and its direct dependencies.
